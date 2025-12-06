@@ -25,7 +25,6 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     height = MediaQuery.of(context).size.height;
     width = MediaQuery.of(context).size.width;
-    print(width);
     if (width > 400) {
       width = 400;
     } else {
@@ -63,6 +62,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       Text('Email Address'),
                       TextField(
                         controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
                           hintText: 'Enter your email',
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -197,6 +197,15 @@ class _RegisterPageState extends State<RegisterPage> {
       SnackBar snackBar = const SnackBar(
         backgroundColor: Colors.red,
         content: Text('Enter a valid email address'),
+        duration: Duration(seconds: 3),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+      return;
+    }
+    if (!RegExp(r'^[0-9]+$').hasMatch(phone)) {
+      SnackBar snackBar = const SnackBar(
+        backgroundColor: Colors.red,
+        content: Text('Enter a valid phone number.'),
         duration: Duration(seconds: 3),
       );
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
