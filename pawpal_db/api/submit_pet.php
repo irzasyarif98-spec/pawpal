@@ -22,7 +22,6 @@
     $lat = $_POST['lat'];
     $long = $_POST['long'];
 
-    // Correct SQL: identifiers must not use single quotes. Use backticks or none.
     $sqlinsert = "INSERT INTO tbl_pets (user_id, pet_name, pet_type, category, description, lat, lng) 
     VALUES ('$userid','$petname','$pettype','$category','$description', '$lat','$long')";
 
