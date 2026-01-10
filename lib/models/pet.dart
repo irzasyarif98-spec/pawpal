@@ -29,7 +29,11 @@ class Pet {
     category = json['category'];
     description = json['description'];
     if (json['image_paths'] != null) {
-      imagePaths = List<String>.from(json['image_paths'].split(','));
+      if (json['image_paths'] is List) {
+        imagePaths = List<String>.from(json['image_paths']);
+      } else if (json['image_paths'] is String) {
+        imagePaths = (json['image_paths'] as String).split(',');
+      }
     }
     lat = double.tryParse(json['lat'].toString());
     lng = double.tryParse(json['lng'].toString());

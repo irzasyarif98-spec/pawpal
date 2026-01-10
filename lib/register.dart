@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:pawpal/login.dart';
 import 'package:http/http.dart' as http;
 import 'package:pawpal/myconfig.dart';
+import 'package:image_picker/image_picker.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -20,6 +23,9 @@ class _RegisterPageState extends State<RegisterPage> {
   TextEditingController confirmPasswordController = TextEditingController();
   late double height, width;
   bool isLoading = false;
+  // Profile image state
+  Uint8List? _profileImageBytes;
+  String? _profileImageBase64;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +62,32 @@ class _RegisterPageState extends State<RegisterPage> {
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                           ),
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      // Profile picture picker
+                      Center(
+                        child: Column(
+                          children: [
+                            GestureDetector(
+                              onTap: _pickProfileImage,
+                              child: CircleAvatar(
+                                radius: 40,
+                                backgroundColor: const Color.fromARGB(255, 255, 255, 255),
+                                backgroundImage: (_profileImageBytes != null
+                                        ? MemoryImage(_profileImageBytes!)
+                                        : null),
+                                child: (_profileImageBytes == null)
+                                    ? const Icon(Icons.camera_alt, color: Colors.black54)
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Tap to upload profile picture',
+                              style: TextStyle(color: Colors.black54),
+                            ),
+                          ],
                         ),
                       ),
                       SizedBox(height: 10),
@@ -238,32 +270,23 @@ class _RegisterPageState extends State<RegisterPage> {
       isLoading = true;
     });
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          content: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Text('Registering...'),
-            ],
-          ),
-        );
-      },
-      barrierDismissible: false,
-    );
+    _showLoadingDialog();
 
-    await http.post(
-      Uri.parse("${MyConfig.baseUrl}/pawpal/api/register_user.php"),
-      body: {
-        'email': email,
-        'password': password,
-        'name': name,
-        'phone': phone,
-      },
-    ).then((response) {
+    try {
+      final response = await http
+          .post(
+            Uri.parse("${MyConfig.baseUrl}/pawpal/api/register_user.php"),
+            body: {
+              'email': email,
+              'password': password,
+              'name': name,
+              'phone': phone,
+              if (_profileImageBase64 != null && _profileImageBase64!.isNotEmpty)
+                'profile_image': _profileImageBase64!,
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
       var jsonResponse = response.body;
       var responseArr = jsonDecode(jsonResponse);
       if (response.statusCode == 200) {
@@ -273,20 +296,14 @@ class _RegisterPageState extends State<RegisterPage> {
           phoneController.clear();
           passwordController.clear();
           confirmPasswordController.clear();
-          
-          if (!mounted) return;
-          if (isLoading) {
-            Navigator.pop(context);
-            setState(() {
-              isLoading = false;
-            });
-          }
 
+          _closeLoadingDialog();
+          if (!mounted) return;
           showDialog(
-            context: context, 
+            context: context,
             builder: (context) => AlertDialog(
-              title: Text('Registration Successful'),
-              content: Text('You have registered successfully. Please sign in to continue.'),
+              title: const Text('Registration Successful'),
+              content: const Text('You have registered successfully. Please sign in to continue.'),
               actions: [
                 TextButton(
                   style: TextButton.styleFrom(
@@ -296,53 +313,93 @@ class _RegisterPageState extends State<RegisterPage> {
                     Navigator.pop(context);
                     Navigator.pop(context);
                     Navigator.push(
-                      context, 
-                      MaterialPageRoute(builder: (context) => const LoginPage())
-                    );
-                  }, 
-                  child: Text('Continue')
+                        context, MaterialPageRoute(builder: (context) => const LoginPage()));
+                  },
+                  child: const Text('Continue'),
                 )
               ],
-            )
+            ),
           );
         } else {
-          SnackBar snackBar = SnackBar(
-            backgroundColor: Colors.red,
-            content: Text(responseArr['message']),
-            duration: Duration(seconds: 3),
-          );
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(snackBar);
-          return;
+          _closeLoadingDialog();
+          _showConnectionError(responseArr['message']);
         }
       } else {
-        SnackBar snackBar = const SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Error registering user. Please try again later.'),
-          duration: Duration(seconds: 3),
-        );
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(snackBar);
-        return;
-        }
-      }).timeout(
-        Duration(seconds: 10),  
-        onTimeout: () {
-          SnackBar snackBar = const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Request timed out. Please try again.'),
-          );
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(snackBar);
-        }
-      );
+        _closeLoadingDialog();
+        _showConnectionError('Error registering user. Please try again later.');
+      }
+    } on TimeoutException {
+      _closeLoadingDialog();
+      _showConnectionError('Request timed out. Please check your connection and try again.');
+    } catch (e) {
+      _closeLoadingDialog();
+      _showConnectionError('Unable to reach the server. Please check your connection.');
+    }
+  }
 
-    if (isLoading) {
-      if (!mounted) return;
-      Navigator.pop(context); // Close the loading dialog
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          content: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: const [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Registering...'),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _closeLoadingDialog() {
+    if (!mounted) return;
+    if (isLoading && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+    setState(() {
+      isLoading = false;
+    });
+  }
+
+  void _showConnectionError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.red,
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Future<void> _pickProfileImage() async {
+    final picker = ImagePicker();
+    try {
+      final XFile? picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
       setState(() {
-        isLoading = false;
+        _profileImageBytes = bytes;
+        _profileImageBase64 = base64Encode(bytes);
       });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Failed to pick image. Please try again.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 }

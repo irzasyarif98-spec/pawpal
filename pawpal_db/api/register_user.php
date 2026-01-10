@@ -18,6 +18,8 @@
 	$phone = $_POST['phone'];
 	$password = $_POST['password'];
 	$hashedpassword = sha1($password);
+	$profile_image = $_POST['profile_image'] ?? '';
+	
 
 	$checkemail = "SELECT * FROM `tbl_users` WHERE `email` = '$email'";
 	$result = $conn->query($checkemail);
@@ -26,11 +28,54 @@
 		sendJsonResponse($response);
 		exit();
 	}
-	$sqlregister = "INSERT INTO `tbl_users`(`email`, `name`, `phone`, `password`) VALUES ('$email','$name','$phone', '$hashedpassword')";
+	// Insert user with a prepared statement
+	$sqlregister = $conn->prepare("INSERT INTO `tbl_users`(`email`, `name`, `phone`, `password`) VALUES (?,?,?,?)");
+	$sqlregister->bind_param("ssss", $email, $name, $phone, $hashedpassword);
 	
 	try{
-		if ($conn->query($sqlregister) === TRUE){
-			$response = array('status' => 'success', 'message' => 'User registered successfully.');
+		if ($sqlregister->execute()){
+			$userId = $conn->insert_id;
+			$uploadDir = 'uploads/users/';
+			if (!is_dir($uploadDir)) {
+				@mkdir($uploadDir, 0777, true);
+			}
+
+			if (empty($profile_image)) {
+				$profileImagePath = 'uploads/users/default.webp';
+			} else {
+				$decodedimage = base64_decode($profile_image, true);
+
+				if ($decodedimage === false) {
+					$response = array('status' => 'failed', 'message' => 'Invalid image format.');
+					sendJsonResponse($response);
+					exit();
+				}
+				$profileImagePath = $uploadDir . 'pp_' . $userId . '.png';
+				if (file_put_contents($profileImagePath, $decodedimage) === false) {
+					$response = array('status' => 'failed', 'message' => 'Failed to save profile image.');
+					sendJsonResponse($response);
+					exit();
+				}
+			}
+			
+			$sqlupdate = "UPDATE tbl_users SET profile_image_path = '$profileImagePath' WHERE user_id = '$userId'";
+            
+            if ($conn->query($sqlupdate) === FALSE) {
+                $response = array('status' => 'failed', 'message' => 'Failed to save image paths to database.');
+                sendJsonResponse(sentArray: $response);
+                exit();
+            }
+		
+			$sqlregister->close();
+			
+
+
+			$response = array(
+				'status' => 'success',
+				'message' => 'User registered successfully.',
+				'user_id' => $userId,
+				'profile_image_path' => $profileImagePath
+			);
 			sendJsonResponse($response);
 		}else{
 			$response = array('status' => 'failed', 'message' => 'User registration failed.');

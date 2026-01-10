@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -189,27 +190,6 @@ class _LoginPageState extends State<LoginPage> {
     String email = emailController.text.trim();
     String password = passwordController.text.trim();
 
-    setState(() {
-      isLoading = true;
-    });
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          content: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Text('Signing In...'),
-            ],
-          ),
-        );
-      },
-      barrierDismissible: false,
-    );
-
     if (email.isEmpty || password.isEmpty) {
       SnackBar snackBar = const SnackBar(
         content: Text('Please fill in all fields.'),
@@ -217,43 +197,93 @@ class _LoginPageState extends State<LoginPage> {
         duration: Duration(seconds: 3),
       );
       if (!mounted) return;
-      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
       return;
     }
 
-    await http.post(
-      Uri.parse('${MyConfig.baseUrl}/pawpal/api/login_user.php'),
-      body: {
-        'email': email,
-        'password': password,
-      },
-    ).then((response) {
-        if (response.statusCode == 200) {
-          var jsonResponse = response.body;
-          var responseArr = jsonDecode(jsonResponse);
-          if (responseArr['status'] == 'success') {
-            user = User.fromJson(responseArr['data'][0]);
+    setState(() {
+      isLoading = true;
+    });
 
-            if (!mounted) return;
-            Navigator.pop(context);
-            Navigator.pop(context);
-            Navigator.push(
-                      context, 
-                      MaterialPageRoute(builder: (context) => HomePage(user: user))
-                    );
-          } else {
-            SnackBar snackBar = SnackBar(
-              backgroundColor: Colors.red,
-              content: Text(responseArr['message']),
-              duration: Duration(seconds: 3),
-            );
-            if (!mounted) return;
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(snackBar);
-          }
+    _showLoadingDialog('Signing In...');
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${MyConfig.baseUrl}/pawpal/api/login_user.php'),
+            body: {
+              'email': email,
+              'password': password,
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        var jsonResponse = response.body;
+        var responseArr = jsonDecode(jsonResponse);
+        if (responseArr['status'] == 'success') {
+          user = User.fromJson(responseArr['data'][0]);
+
+          _closeLoadingDialog();
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => HomePage(user: user)),
+          );
+        } else {
+          _closeLoadingDialog();
+          _showConnectionError(responseArr['message']);
         }
+      } else {
+        _closeLoadingDialog();
+        _showConnectionError('Error signing in. Please try again later.');
       }
+    } on TimeoutException {
+      _closeLoadingDialog();
+      _showConnectionError('Request timed out. Please check your connection and try again.');
+    } catch (e) {
+      _closeLoadingDialog();
+      _showConnectionError('Unable to reach the server. Please check your connection.');
+    }
+  }
+
+  void _showLoadingDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          content: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 20),
+              Text(message),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _closeLoadingDialog() {
+    if (!mounted) return;
+    if (isLoading && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+    setState(() {
+      isLoading = false;
+    });
+  }
+
+  void _showConnectionError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.red,
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 }

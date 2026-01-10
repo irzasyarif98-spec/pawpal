@@ -12,7 +12,7 @@
         $password = $_POST['password'];
         $hashedpassword = sha1($password);
 
-        $login = "SELECT * FROM `tbl_users` WHERE `email` = '$email' AND `password` = '$hashedpassword'";
+        $login = "SELECT `user_id`, `email`, `name`, `phone`, `reg_date`, `profile_image_path` FROM `tbl_users` WHERE `email` = '$email' AND `password` = '$hashedpassword'";
         $result = $conn->query($login);
         if ($result->num_rows > 0) {
             $userdata = array();

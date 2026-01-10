@@ -20,14 +20,20 @@ class PetSubmissionForm extends StatefulWidget {
 class _PetSubmissionFormState extends State<PetSubmissionForm> {
   TextEditingController nameController = TextEditingController();
   TextEditingController descriptionController = TextEditingController();
+  TextEditingController amountController = TextEditingController();
   List<String> petCategories = ['Cat', 'Dog', 'Rabbit', 'Others'];
   List<String> submissionCategories = ['Adoption', 'Donation Request', 'Help/Rescue'];
+  List<String> donationTypes = ['Food', 'Medical', 'Money'];
+  bool donationVisible = false;
+  bool amountVisible = false;
   String? selectedPetType;
   String? selectedCategory;
+  String? selectedDonationType;
+  String? selectedAmount;
   late double height, width;
   List<File> imageFiles = [];
   List<Uint8List> webImageFiles = [];
-  List<String> base64Images = [];  // Store base64 strings immediately
+  List<String> base64Images = []; 
   String? lat, long;
   bool hasPic1 = false;
   bool hasPic2 = false;
@@ -36,9 +42,6 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
   @override
   void initState() {
     super.initState();
-    //imageFiles = [];
-    //webImageFiles = [];
-
   }
 
   @override
@@ -207,12 +210,94 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
                             onChanged: (String? newValue) {
                               setState(() {
                                 selectedCategory = newValue!;
+                                donationVisible = (selectedCategory == 'Donation Request');
                               });
                             },
                           ),
                         ],
                       ),
                       SizedBox(height: 15), 
+                      Visibility(
+                        visible: donationVisible,
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 100,
+                              child: Text("Donation Type")
+                            ),
+                            DropdownButton(
+                              value: selectedDonationType,
+                              hint: Text('Select donation type'),
+                              items: donationTypes.map<DropdownMenuItem<String>>((String value) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value),
+                                );
+                              }).toList(), 
+                              onChanged: (String? newValue) {
+                                setState(() {
+                                  selectedDonationType = newValue!;
+                                  amountVisible = (selectedDonationType == 'Money');
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      Visibility(
+                        visible: amountVisible,
+                        child: Column(
+                          children: [
+                            SizedBox(height: 15),
+                            Row(
+                              children: [
+                                SizedBox(
+                                  width: 100,
+                                  child: Text("Amount")
+                                ),
+                                Expanded(
+                                  child: TextField(
+                                    controller: amountController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      hintText: 'Enter the amount',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Visibility(
+                        visible: !amountVisible,
+                        child: Column(
+                          children: [
+                            SizedBox(height: 15),
+                            Row(
+                              children: [
+                                SizedBox(
+                                  width: 100,
+                                  child: Text("Description")
+                                ),
+                                Expanded(
+                                  child: TextField(
+                                    controller: 
+                                    amountController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      hintText: 'What do you need?',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 15),
                       Row(
                         children: [
                           SizedBox(
@@ -308,6 +393,54 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
       );
       return;
     }
+
+    if (selectedDonationType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please select a donation type.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    if (selectedDonationType == 'Money' && amountController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please enter the donation amount.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    if (selectedDonationType == 'Money') {
+      double? amount = double.tryParse(amountController.text.trim());
+      if (amount == null || amount <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Please enter a valid donation amount.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+    }
+
+    if (selectedDonationType != 'Money' && amountController.text.trim().length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Description must be at least 10 characters long.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     if (descriptionController.text.trim().length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -332,6 +465,72 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
     submitPet();
   }
 
+  void subtmitDonationRequest(int petId) async {
+    final type = selectedDonationType;
+    final amountText = amountController.text.trim();
+
+    if (type == null) return;
+
+    Map<String, String> body = {
+      'pet_id': petId.toString(),
+      'type': type,
+    };
+
+    if (type == 'Money') {
+      double.parse(amountText);
+      body['amount'] = amountText;
+      // description omitted/null for Money
+    } else {
+      // amount omitted/null for non-money
+      body['description'] = amountText;
+    }
+
+    try {
+      final resp = await http.post(
+        Uri.parse('${MyConfig.baseUrl}/pawpal/api/submit_donation_request.php'),
+        body: body,
+      );
+      if (!mounted) return;
+      if (resp.statusCode == 200) {
+        final jsonResp = jsonDecode(resp.body);
+        if (jsonResp['status'] == 'success') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.green,
+              content: Text('Donation request submitted!'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.red,
+              content: Text(jsonResp['message'] ?? 'Failed to submit donation request'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Server error submitting donation request.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Network Error: $e'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   void submitPet() async {
 
     if (!kIsWeb) {
@@ -354,7 +553,7 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
       });
     }
 
-    // Use pre-encoded base64 images instead of encoding now
+
     String petName = nameController.text.trim();
     String petType = selectedPetType!;
     String submissionCategory = selectedCategory!;
@@ -382,6 +581,10 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
         var jsonResponse = response.body;
         var responseArr = jsonDecode(jsonResponse);
         if (responseArr['status'] == 'success') {
+          // Chain donation request if applicable
+          if (selectedCategory == 'Donation Request' && responseArr['pet_id'] != null) {
+            subtmitDonationRequest(responseArr['pet_id']);
+          }
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -449,24 +652,24 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
       imageQuality: 90,
       source: ImageSource.gallery,
     );
-    //List<File>? imageFiles = [];
 
-    if (pickedImages != null) {
-      if (kIsWeb) {
-        //webImage = await pickedFile.readAsBytes();
-        //for (final xfile in pickedImages) {
-        final bytes = await pickedImages.readAsBytes();
-        webImageFiles.add(bytes);
-        base64Images.add(base64Encode(bytes));
-        //}
-        setState(() {});
-      } else {
-        //image = File(pickedFile.path);
-        //imageFiles.addAll(pickedImages.map((file) => File(file.path)).toList());
-        imageFiles.add(File(pickedImages.path));
-        base64Images.add(base64Encode(await File(pickedImages.path).readAsBytes()));
-      }
+    if (pickedImages == null) return;
+    if (!_isImageFile(pickedImages)) {
+      _showImageError();
+      return;
     }
+
+    if (kIsWeb) {
+      final bytes = await pickedImages.readAsBytes();
+      webImageFiles.add(bytes);
+      base64Images.add(base64Encode(bytes));
+      setState(() {});
+    } else {
+      final file = File(pickedImages.path);
+      imageFiles.add(file);
+      base64Images.add(base64Encode(await file.readAsBytes()));
+    }
+
     refreshImageView();
     print(imageFiles.length);
     print(webImageFiles.length);
@@ -491,18 +694,22 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
       imageQuality: 90,
     );
 
-    if (pickedFile != null) {
-      if (kIsWeb) {
-        final bytes = await pickedFile.readAsBytes();
-        webImageFiles.add(bytes);
-        base64Images.add(base64Encode(bytes));
-        setState(() {});
-      } else {
-        imageFiles.add(File(pickedFile.path));
-        // Convert to base64 immediately after taking photo
-        final bytes = await File(pickedFile.path).readAsBytes();
-        base64Images.add(base64Encode(bytes));
-      }
+    if (pickedFile == null) return;
+    if (!_isImageFile(pickedFile)) {
+      _showImageError();
+      return;
+    }
+
+    if (kIsWeb) {
+      final bytes = await pickedFile.readAsBytes();
+      webImageFiles.add(bytes);
+      base64Images.add(base64Encode(bytes));
+      setState(() {});
+    } else {
+      final file = File(pickedFile.path);
+      imageFiles.add(file);
+      final bytes = await file.readAsBytes();
+      base64Images.add(base64Encode(bytes));
     }
     refreshImageView();
   }
@@ -543,7 +750,6 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
   bool serviceEnabled;
   LocationPermission permission;
 
-  // Test if location services are enabled.
   serviceEnabled = await Geolocator.isLocationServiceEnabled();
   if (!serviceEnabled) {
     if (!mounted) return Future.error('Location services are disabled.');
@@ -586,8 +792,23 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
       'Location permissions are permanently denied, we cannot request permissions.');
   } 
 
-  // When we reach here, permissions are granted and we can
-  // continue accessing the position of the device.
   return await Geolocator.getCurrentPosition();
 }
+
+  bool _isImageFile(XFile file) {
+    final lowerName = file.name.toLowerCase();
+    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'];
+    return allowedExtensions.any((ext) => lowerName.endsWith(ext));
+  }
+
+  void _showImageError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.red,
+        content: Text('Only image files are allowed.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
 }
