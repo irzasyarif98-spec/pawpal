@@ -394,51 +394,54 @@ class _PetSubmissionFormState extends State<PetSubmissionForm> {
       return;
     }
 
-    if (selectedDonationType == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Please select a donation type.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    if (selectedDonationType == 'Money' && amountController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Please enter the donation amount.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    if (selectedDonationType == 'Money') {
-      double? amount = double.tryParse(amountController.text.trim());
-      if (amount == null || amount <= 0) {
+    // Donation-specific validation only if category is Donation Request
+    if (selectedCategory == 'Donation Request') {
+      if (selectedDonationType == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red,
-            content: Text('Please enter a valid donation amount.'),
+            content: Text('Please select a donation type.'),
             duration: Duration(seconds: 3),
           ),
         );
         return;
       }
-    }
 
-    if (selectedDonationType != 'Money' && amountController.text.trim().length < 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Description must be at least 10 characters long.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
+      if (selectedDonationType == 'Money' && amountController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Please enter the donation amount.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      if (selectedDonationType == 'Money') {
+        double? amount = double.tryParse(amountController.text.trim());
+        if (amount == null || amount <= 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.red,
+              content: Text('Please enter a valid donation amount.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+          return;
+        }
+      }
+
+      if (selectedDonationType != 'Money' && amountController.text.trim().length < 10) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Description must be at least 10 characters long.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
     }
 
     if (descriptionController.text.trim().length < 10) {

@@ -281,13 +281,20 @@ class _DonationHistoryState extends State<DonationHistory> {
           } else {
             setState(() {
               error = jsonResponse['message'] ?? 'Failed to load sent donations';
+              isLoading = false;
             });
           }
         } on FormatException {
           setState(() {
             error = 'Invalid response format for sent donations.';
+            isLoading = false;
           });
         }
+      } else {
+        setState(() {
+          error = 'Failed to load sent donations (status: ${sentResponse.statusCode})';
+          isLoading = false;
+        });
       }
       // Fetch received donations (where donations are for user's pets)
       // Backend should join donation_history.donation_id = donations.id
